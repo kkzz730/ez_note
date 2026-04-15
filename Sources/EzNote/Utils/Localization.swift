@@ -81,6 +81,8 @@ struct LocalizedStrings {
     var createFirstNote: String { text(zh: "点击 + 创建第一个笔记", en: "Click + to create your first note") }
     var noNoteSelected: String { text(zh: "无笔记", en: "No Notes") }
     var createNoteHelp: String { text(zh: "新建笔记", en: "Create Note") }
+    var renameNote: String { text(zh: "重命名笔记", en: "Rename Note") }
+    var renameCurrentNoteHelp: String { text(zh: "重命名当前笔记", en: "Rename Current Note") }
     var deleteCurrentNoteHelp: String { text(zh: "删除当前笔记", en: "Delete Current Note") }
     var shortcutWindowTitle: String { text(zh: "EzNote · 设置", en: "EzNote · Settings") }
     var shortcutSectionTitle: String { text(zh: "切换悬浮面板 · 全局快捷键", en: "Toggle Floating Panel · Global Shortcut") }

@@ -6,8 +6,11 @@ struct FloatingNoteView: View {
     @EnvironmentObject var languageManager: LanguageManager
 
     @State private var selectedNoteID: UUID?
+    @State private var editingTitle: String = ""
     @State private var editingContent: String = ""
+    @State private var showRenamePopover = false
     @State private var showDeleteAlert = false
+    @FocusState private var renameFieldFocused: Bool
 
     private var selectedNote: Note? {
         if let id = selectedNoteID {
@@ -29,10 +32,10 @@ struct FloatingNoteView: View {
         .frame(minWidth: 260, minHeight: 280)
         .onAppear {
             restoreLastSelection()
-            syncContent()
+            syncFields()
         }
         .onChange(of: selectedNoteID) { _, _ in
-            syncContent()
+            syncFields()
             if let id = selectedNoteID {
                 UserDefaults.standard.set(id.uuidString, forKey: Constants.lastSelectedNoteKey)
             }
@@ -66,6 +69,19 @@ struct FloatingNoteView: View {
             .labelsHidden()
             .frame(maxWidth: .infinity)
 
+            Button {
+                beginRename()
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedNote == nil)
+            .help(l10n.renameCurrentNoteHelp)
+            .popover(isPresented: $showRenamePopover, arrowEdge: .top) {
+                renamePopover
+            }
+
             Button(action: createNote) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
@@ -90,6 +106,42 @@ struct FloatingNoteView: View {
         .padding(.vertical, 10)
     }
 
+    private var renamePopover: some View {
+        let l10n = languageManager.strings
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(l10n.renameNote)
+                .font(.headline)
+
+            TextField(l10n.titlePlaceholder, text: $editingTitle)
+                .textFieldStyle(.roundedBorder)
+                .focused($renameFieldFocused)
+                .onSubmit {
+                    saveRename()
+                }
+
+            HStack {
+                Button(l10n.cancel) {
+                    showRenamePopover = false
+                }
+
+                Spacer()
+
+                Button(l10n.save) {
+                    saveRename()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 260)
+        .onAppear {
+            DispatchQueue.main.async {
+                renameFieldFocused = true
+            }
+        }
+    }
+
     // MARK: - Editor
 
     private var editorArea: some View {
@@ -102,7 +154,8 @@ struct FloatingNoteView: View {
                     .scrollContentBackground(.hidden)
                     .padding(8)
                     .onChange(of: editingContent) { _, newValue in
-                        guard let id = selectedNoteID ?? store.notes.first?.id else { return }
+                        guard let id = selectedNoteID ?? store.notes.first?.id,
+                              selectedNote?.content != newValue else { return }
                         store.updateNote(id: id) { $0.content = newValue }
                     }
             } else {
@@ -143,7 +196,13 @@ struct FloatingNoteView: View {
     private func createNote() {
         let note = store.addNote()
         selectedNoteID = note.id
-        editingContent = note.content
+        syncFields()
+    }
+
+    private func beginRename() {
+        guard selectedNote != nil else { return }
+        editingTitle = selectedNote?.title ?? ""
+        showRenamePopover = true
     }
 
     private func deleteCurrentNote() {
@@ -160,10 +219,22 @@ struct FloatingNoteView: View {
                 selectedNoteID = nil
             }
         }
-        syncContent()
+        syncFields()
     }
 
-    private func syncContent() {
+    private func saveRename() {
+        guard let id = selectedNoteID ?? store.notes.first?.id else { return }
+        let trimmed = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmed.isEmpty ? languageManager.strings.untitledNote : trimmed
+        if selectedNote?.title != title {
+            store.updateNote(id: id) { $0.title = title }
+        }
+        editingTitle = title
+        showRenamePopover = false
+    }
+
+    private func syncFields() {
+        editingTitle = selectedNote?.title ?? ""
         editingContent = selectedNote?.content ?? ""
     }
 
