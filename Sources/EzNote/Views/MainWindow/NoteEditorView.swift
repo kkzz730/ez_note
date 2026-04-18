@@ -42,14 +42,15 @@ struct NoteEditorView: View {
     // MARK: - Editor
 
     private var editorSection: some View {
-        TextEditor(text: $note.content)
-            .font(.body)
-            .scrollContentBackground(.hidden)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .onChange(of: note.content) { _, _ in
+        RichTextEditor(
+            richData: $note.richData,
+            plainText: $note.content,
+            font: .systemFont(ofSize: NSFont.systemFontSize + 1),
+            insets: NSSize(width: 24, height: 16),
+            onTextChange: {
                 note.modifiedAt = Date()
             }
+        )
     }
 
     private func formatDate(_ date: Date) -> String {

@@ -1,16 +1,40 @@
 import SwiftUI
 
 struct FloatingNoteView: View {
+    private let headerActionAreaWidth: CGFloat = 96
+
     @EnvironmentObject var store: NoteStore
     @EnvironmentObject var panelManager: PanelManager
     @EnvironmentObject var languageManager: LanguageManager
 
     @State private var selectedNoteID: UUID?
     @State private var editingTitle: String = ""
-    @State private var editingContent: String = ""
     @State private var showRenamePopover = false
     @State private var showDeleteAlert = false
     @FocusState private var renameFieldFocused: Bool
+
+    /// 直连 store 的正文绑定：读写都走 `store.updateNote`，保证主窗口 / 悬浮面板共享同一份数据。
+    private var contentBinding: Binding<String> {
+        Binding(
+            get: { selectedNote?.content ?? "" },
+            set: { newValue in
+                guard let id = selectedNoteID ?? store.notes.first?.id else { return }
+                guard store.note(byID: id)?.content != newValue else { return }
+                store.updateNote(id: id) { $0.content = newValue }
+            }
+        )
+    }
+
+    private var richBinding: Binding<Data?> {
+        Binding(
+            get: { selectedNote?.richData },
+            set: { newValue in
+                guard let id = selectedNoteID ?? store.notes.first?.id else { return }
+                guard store.note(byID: id)?.richData != newValue else { return }
+                store.updateNote(id: id) { $0.richData = newValue }
+            }
+        )
+    }
 
     private var selectedNote: Note? {
         if let id = selectedNoteID {
@@ -55,7 +79,10 @@ struct FloatingNoteView: View {
     private var headerBar: some View {
         let l10n = languageManager.strings
 
-        return HStack(spacing: 8) {
+        return HStack(spacing: 12) {
+            Color.clear
+                .frame(width: headerActionAreaWidth, height: 1)
+
             Picker("", selection: $selectedNoteID) {
                 if store.notes.isEmpty {
                     Text(l10n.noNoteSelected).tag(nil as UUID?)
@@ -69,38 +96,41 @@ struct FloatingNoteView: View {
             .labelsHidden()
             .frame(maxWidth: .infinity)
 
-            Button {
-                beginRename()
-            } label: {
-                Image(systemName: "pencil")
-                    .font(.title3)
-            }
-            .buttonStyle(.plain)
-            .disabled(selectedNote == nil)
-            .help(l10n.renameCurrentNoteHelp)
-            .popover(isPresented: $showRenamePopover, arrowEdge: .top) {
-                renamePopover
-            }
-
-            Button(action: createNote) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
-            }
-            .buttonStyle(.plain)
-            .help(l10n.createNoteHelp)
-
-            Button {
-                if selectedNote != nil {
-                    showDeleteAlert = true
+            HStack(spacing: 12) {
+                Button {
+                    beginRename()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.title3)
                 }
-            } label: {
-                Image(systemName: "trash")
-                    .font(.title3)
-                    .foregroundStyle(selectedNote != nil ? .red : .gray)
+                .buttonStyle(.plain)
+                .disabled(selectedNote == nil)
+                .help(l10n.renameCurrentNoteHelp)
+                .popover(isPresented: $showRenamePopover, arrowEdge: .top) {
+                    renamePopover
+                }
+
+                Button(action: createNote) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .help(l10n.createNoteHelp)
+
+                Button {
+                    if selectedNote != nil {
+                        showDeleteAlert = true
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.title3)
+                        .foregroundStyle(selectedNote != nil ? .red : .gray)
+                }
+                .buttonStyle(.plain)
+                .disabled(selectedNote == nil)
+                .help(l10n.deleteCurrentNoteHelp)
             }
-            .buttonStyle(.plain)
-            .disabled(selectedNote == nil)
-            .help(l10n.deleteCurrentNoteHelp)
+            .frame(width: headerActionAreaWidth, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -149,15 +179,12 @@ struct FloatingNoteView: View {
 
         return Group {
             if selectedNote != nil {
-                TextEditor(text: $editingContent)
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .onChange(of: editingContent) { _, newValue in
-                        guard let id = selectedNoteID ?? store.notes.first?.id,
-                              selectedNote?.content != newValue else { return }
-                        store.updateNote(id: id) { $0.content = newValue }
-                    }
+                RichTextEditor(
+                    richData: richBinding,
+                    plainText: contentBinding,
+                    font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+                    insets: NSSize(width: 18, height: 12)
+                )
             } else {
                 VStack(spacing: 8) {
                     Spacer()
@@ -235,7 +262,6 @@ struct FloatingNoteView: View {
 
     private func syncFields() {
         editingTitle = selectedNote?.title ?? ""
-        editingContent = selectedNote?.content ?? ""
     }
 
     private func restoreLastSelection() {
